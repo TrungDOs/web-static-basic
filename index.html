@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Memory Card Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    background: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+#header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    box-sizing: border-box;
+    background: #002182;
+    color: white;
+}
+#gameTitle { font-size: 24px; font-weight: 600; color: white; }
+#logo { height: 60px; margin: 0 auto; position: absolute; left: 50%; transform: translateX(-50%); }
+.infoBox {
+    background: white;
+    color: #e6202d;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: 600;
+    font-size: 18px;
+    margin-left: 10px;
+}
+
+/* GRID */
+#game { margin-top: 20px; display: grid;   row-gap: 15px;     /* khoảng cách dọc */
+  column-gap: 60px;  /* khoảng cách ngang */; justify-content: center; }
+.card {
+    width: 130px; height: 170px;
+    perspective: 1000px;
+}
+.card-inner {
+    position: relative;
+    width: 100%; height: 100%;
+    transition: transform 0.5s;
+    transform-style: preserve-3d;
+    cursor: pointer;
+}
+.card.flipped .card-inner { transform: rotateY(180deg); }
+
+.card-front, .card-back {
+    position: absolute;
+    width: 100%; height: 100%;
+    backface-visibility: hidden;
+    border-radius: 10px;
+}
+.card-front {
+    background: url('https://i.postimg.cc/zBN4LTgt/Artboard-1-copy-2.png') no-repeat center center;
+    background-size: cover;
+}
+.card-back {
+    transform: rotateY(180deg);
+    display: flex; justify-content: center; align-items: center;
+}
+.card-back img {
+    width: 130px; height: 170px; border-radius: 10px;
+}
+.card.matched .card-inner { box-shadow: 0 0 15px 5px gold; }
+
+/* POPUP THÔNG BÁO CUỐI GAME */
+#popup {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    display: flex;
+}
+#popupContent {
+    background: rgba(255,255,255,0.9);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    font-size: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+#popupContent button {
+    padding:12px 30px;
+    font-family: 'Inter', sans-serif;
+    font-weight:600;
+    color: white;
+    background: red;
+    border: none;
+    border-radius: 8px;
+    cursor:pointer;
+    font-size: 18px;
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+    <div id="gameTitle">Memory Challenge</div>
+    <img id="logo" src="https://i.postimg.cc/XYSmyPXy/Logo-ngang-trang.png" alt="Logo">
+    <div style="display:flex; gap:10px;">
+        <div class="infoBox" id="scoreBox">Score: 0🟡</div>
+        <div class="infoBox" id="timeBox">Time: 90s</div>
+    </div>
+</div>
+
+<div id="game"></div>
+
+<div id="popup">
+    <div id="popupContent">
+        <div id="popupMessage"></div>
+        <div id="popupScore"></div>
+        <button id="restartBtn">START GAME</button>
+    </div>
+</div>
+
+<audio id="sound" src="https://drive.google.com/uc?export=view&id=YOUR_SOUND_ID"></audio>
+
+<script>
+const NUM_PAIRS = 12; // 3x8
+const GAME_TIME = 90;
+const COIN_PER_PAIR = 10;
+const WIN_SCORE = 100;
+
+const images = [
+'https://i.postimg.cc/NFYMCDjZ/Artboard-1-copy.png',
+'https://i.postimg.cc/J0mnYxzK/Artboard-1-copy-10.png',
+'https://i.postimg.cc/NFYMCDjd/Artboard-1-copy-11.png',
+'https://i.postimg.cc/mkRDpjg8/Artboard-1-copy-12.png',
+'https://i.postimg.cc/5y10Kg2R/Artboard-1-copy-14.png',
+'https://i.postimg.cc/nrZzS2h5/Artboard-1-copy-20v.png',
+'https://i.postimg.cc/prxTcCLK/Artboard-1-copy-3.png',
+'https://i.postimg.cc/vTMB2hZL/Artboard-1-copy-4.png',
+'https://i.postimg.cc/3N7Rf1xF/Artboard-1-copy-5.png',
+'https://i.postimg.cc/j2K53cSh/Artboard-1-copy-6.png',
+'https://i.postimg.cc/7hD6t9Z1/Artboard-1-copy-8.png',
+'https://i.postimg.cc/4yZd2Px5/Artboard-1-copy-9.png',
+];
+
+const game = document.getElementById("game");
+const scoreBox = document.getElementById("scoreBox");
+const timeBox = document.getElementById("timeBox");
+const popup = document.getElementById("popup");
+const popupMessage = document.getElementById("popupMessage");
+const popupScore = document.getElementById("popupScore");
+const restartBtn = document.getElementById("restartBtn");
+const sound = document.getElementById("sound");
+
+let cards = [], flipped=[], lock=false;
+let score=0, timer=GAME_TIME, timerInterval, startTime;
+let timerStarted=false;
+
+function initGame(){
+    game.innerHTML = "";
+    score=0; flipped=[]; lock=false;
+    timer=GAME_TIME; timerStarted=false;
+    updateScore();
+    updateTime();
+
+    let selectedImages = images.slice(0,NUM_PAIRS);
+    cards = [...selectedImages, ...selectedImages];
+    cards.sort(() => Math.random() -0.5);
+
+    game.style.gridTemplateColumns = `repeat(8, 90px)`;
+
+    cards.forEach(img=>{
+        const card = document.createElement("div");
+        card.classList.add("card");
+        card.dataset.img = img;
+
+        const inner = document.createElement("div");
+        inner.classList.add("card-inner");
+
+        const front = document.createElement("div");
+        front.classList.add("card-front");
+
+        const back = document.createElement("div");
+        back.classList.add("card-back");
+        const imgEl = document.createElement("img");
+        imgEl.src = img;
+        back.appendChild(imgEl);
+
+        inner.appendChild(front);
+        inner.appendChild(back);
+        card.appendChild(inner);
+
+        card.onclick = ()=>flipCard(card);
+        game.appendChild(card);
+    });
+}
+
+function startTimer(){
+    if(timerStarted) return;
+    timerStarted = true;
+    startTime = Date.now();
+    timerInterval = setInterval(()=>{
+        const elapsed = Math.floor((Date.now() - startTime)/1000);
+        timer = GAME_TIME - elapsed;
+        if(timer<=0){
+            timer=0;
+            clearInterval(timerInterval);
+            updateTime();
+            showEndGame();
+        } else updateTime();
+    }, 200);
+}
+
+function flipCard(card){
+    startTimer(); // Bấm thẻ đầu tiên -> bắt đầu timer
+    if(lock || card.classList.contains("matched") || card.classList.contains("flipped")) return;
+    card.classList.add("flipped");
+    flipped.push(card);
+    if(flipped.length===2){
+        lock=true;
+        setTimeout(()=>{
+            const [c1,c2] = flipped;
+            if(c1.dataset.img===c2.dataset.img){
+                c1.classList.add("matched");
+                c2.classList.add("matched");
+                score+=COIN_PER_PAIR;
+                sound.play();
+            } else {
+                c1.classList.remove("flipped");
+                c2.classList.remove("flipped");
+            }
+            flipped=[]; lock=false;
+            updateScore();
+
+            // Kiểm tra hết thẻ
+            if(document.querySelectorAll('.card.matched').length === cards.length){
+                clearInterval(timerInterval);
+                showEndGame();
+            }
+
+        },700);
+    }
+}
+
+function updateScore(){ scoreBox.textContent = `Score: ${score}🟡`; }
+function updateTime(){ timeBox.textContent = `Time: ${timer}s`; }
+
+function showEndGame(){
+    if(document.querySelectorAll('.card.matched').length === cards.length || score>=WIN_SCORE){
+        popupMessage.textContent = "YOU ARE WINNER!";
+    } else {
+        popupMessage.textContent = "TRY AGAIN!";
+    }
+    popupScore.textContent = `Score: ${score}🟡`;
+    popup.style.display="flex";
+}
+
+restartBtn.onclick=()=>{
+    popup.style.display="none";
+    initGame();
+}
+
+// Khởi tạo game ngay khi load trang
+window.onload = initGame;
+</script>
+</body>
+</html>
